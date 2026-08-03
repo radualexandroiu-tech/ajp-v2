@@ -13,6 +13,7 @@
 <link rel="apple-touch-icon" href="./icon-192.png">
 <link rel="icon" type="image/png" href="./icon-192.png">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#1e3c72;min-height:100vh;overflow-x:hidden}
@@ -140,6 +141,31 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 </style>
 </head>
 <body>
+
+<!-- ============ ECRAN LOGIN / INREGISTRARE ============ -->
+<div id="authScreen" style="position:fixed;inset:0;background:linear-gradient(135deg,#1e3c72,#2a5298);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px">
+  <div style="background:#fff;border-radius:16px;padding:32px 26px;max-width:380px;width:100%;box-shadow:0 10px 40px rgba(0,0,0,0.3)">
+    <h1 style="text-align:center;color:#1e3c72;font-size:22px;margin-bottom:6px">⚖️ Agenda Juridică</h1>
+    <p id="authSub" style="text-align:center;color:#718096;font-size:13px;margin-bottom:22px">Autentifica-te pentru a continua</p>
+    <div id="authMsg" style="display:none;padding:10px;border-radius:8px;font-size:13px;margin-bottom:14px"></div>
+    <form id="authForm" onsubmit="return handleAuth(event)">
+      <div style="margin-bottom:14px">
+        <label style="display:block;margin-bottom:5px;font-weight:600;color:#2d3748;font-size:13px">Email</label>
+        <input type="email" id="authEmail" required style="width:100%;padding:11px;border:2px solid #e2e8f0;border-radius:8px;font-size:14px">
+      </div>
+      <div style="margin-bottom:18px">
+        <label style="display:block;margin-bottom:5px;font-weight:600;color:#2d3748;font-size:13px">Parola</label>
+        <input type="password" id="authPass" required minlength="6" style="width:100%;padding:11px;border:2px solid #e2e8f0;border-radius:8px;font-size:14px">
+      </div>
+      <button type="submit" id="authBtn" style="width:100%;padding:12px;background:#2a5298;color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer">Intra in cont</button>
+    </form>
+    <p style="text-align:center;margin-top:16px;font-size:13px;color:#718096">
+      <span id="authToggleTxt">Nu ai cont?</span>
+      <a href="#" onclick="toggleAuthMode();return false" id="authToggleLink" style="color:#2a5298;font-weight:600">Creeaza cont</a>
+    </p>
+  </div>
+</div>
+
 <div class="nbox" id="nbox"></div>
 
 <div id="installBanner" class="ibanner">
@@ -158,6 +184,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <button class="hbtn" onclick="exportData()">💾 Backup</button>
       <label class="hbtn">📂 Import<input type="file" id="impFile" accept=".json" style="display:none" onchange="importData(event)"></label>
       <button class="hbtn" onclick="syncManual()" style="background:rgba(23,162,184,0.45);border-color:rgba(23,162,184,0.8)">🔄 Sync portal</button>
+      <button class="hbtn" onclick="logoutApp()" style="background:rgba(220,53,69,0.4);border-color:rgba(220,53,69,0.7)">🚪 Iesire</button>
     </div>
     <div class="sync-bar"><div class="sdot" id="sdot"></div><span id="stxt" style="color:rgba(255,255,255,0.75)">Se verifica portalul...</span></div>
     <div class="search-wrap">
@@ -354,7 +381,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 </div>
 <script>
 // ================================================================
-// AGENDA JURIDICA v4 - CLEAN BUILD
+// AGENDA JURIDICA v4 - CLEAN BUILD (cu Supabase auth + sync)
 // ================================================================
 
 // --- Date globale ---
@@ -380,6 +407,121 @@ var currentFisaId = null;
 
 // --- Portal backend ---
 var BACKEND = 'https://ajp-backend.vercel.app/api/portal';
+
+// ================================================================
+// SUPABASE - AUTENTIFICARE SI SINCRONIZARE
+// ================================================================
+var SUPABASE_URL = 'https://gmirrkmsflnikfcodtyf.supabase.co';
+var SUPABASE_KEY = 'sb_publishable_3QqUJDz5yUU3FNDTXObNjw_4BRcRzPJ';
+var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+var currentUser = null;
+var authMode = 'login';
+var syncTimeout = null;
+
+function showAuthScreen() { document.getElementById('authScreen').style.display = 'flex'; }
+function hideAuthScreen() { document.getElementById('authScreen').style.display = 'none'; }
+
+function toggleAuthMode() {
+  authMode = (authMode === 'login') ? 'signup' : 'login';
+  document.getElementById('authBtn').textContent = (authMode === 'login') ? 'Intra in cont' : 'Creeaza cont';
+  document.getElementById('authSub').textContent = (authMode === 'login') ? 'Autentifica-te pentru a continua' : 'Creeaza un cont nou';
+  document.getElementById('authToggleTxt').textContent = (authMode === 'login') ? 'Nu ai cont?' : 'Ai deja cont?';
+  document.getElementById('authToggleLink').textContent = (authMode === 'login') ? 'Creeaza cont' : 'Intra in cont';
+  hideAuthMsg();
+}
+function showAuthMsg(msg, tip) {
+  var el = document.getElementById('authMsg');
+  el.textContent = msg;
+  el.style.display = 'block';
+  if (tip === 'err') { el.style.background = '#f8d7da'; el.style.color = '#721c24'; }
+  else { el.style.background = '#d4edda'; el.style.color = '#155724'; }
+}
+function hideAuthMsg() { document.getElementById('authMsg').style.display = 'none'; }
+
+function handleAuth(e) {
+  e.preventDefault();
+  var email = document.getElementById('authEmail').value.trim();
+  var pass = document.getElementById('authPass').value;
+  var btn = document.getElementById('authBtn');
+  btn.disabled = true;
+  btn.textContent = 'Se proceseaza...';
+  hideAuthMsg();
+  var action = (authMode === 'login')
+    ? sb.auth.signInWithPassword({ email: email, password: pass })
+    : sb.auth.signUp({ email: email, password: pass });
+  action.then(function(res) {
+    btn.disabled = false;
+    btn.textContent = (authMode === 'login') ? 'Intra in cont' : 'Creeaza cont';
+    if (res.error) { showAuthMsg(res.error.message, 'err'); return; }
+    if (authMode === 'signup') {
+      if (res.data.session) {
+        currentUser = res.data.session.user;
+        hideAuthScreen();
+        init();
+      } else {
+        showAuthMsg('Cont creat! Verifica email-ul pentru confirmare, apoi intra in cont.', 'ok');
+        toggleAuthMode();
+      }
+    } else {
+      currentUser = res.data.session.user;
+      hideAuthScreen();
+      init();
+    }
+  });
+  return false;
+}
+
+function logoutApp() {
+  if (!confirm('Sigur vrei sa iesi din cont?')) return;
+  sb.auth.signOut().then(function() {
+    currentUser = null;
+    appOK = false;
+    location.reload();
+  });
+}
+
+function syncToSupabase() {
+  if (!currentUser) return;
+  clearTimeout(syncTimeout);
+  syncTimeout = setTimeout(function() {
+    var payload = {
+      clienti: clienti, dosare: dosare, dosareUP: dosareUP,
+      dosareTerminate: dosareTerminate, dosareLucru: dosareLucru,
+      termene: termene, todos: todos, jurnal: jurnal
+    };
+    sb.from('stare_aplicatie').upsert({
+      user_id: currentUser.id,
+      date: payload,
+      updated_at: new Date().toISOString()
+    }).then(function(res) {
+      if (res.error) console.error('Eroare sincronizare Supabase:', res.error);
+    });
+  }, 1200);
+}
+
+function loadFromSupabase(callback) {
+  sb.from('stare_aplicatie').select('date').eq('user_id', currentUser.id).maybeSingle()
+    .then(function(res) {
+      if (res.error) { console.error('Eroare incarcare Supabase:', res.error); loadData(); }
+      else if (res.data && res.data.date) {
+        var d = res.data.date;
+        clienti = d.clienti || [];
+        dosare = d.dosare || [];
+        dosareUP = d.dosareUP || [];
+        dosareTerminate = d.dosareTerminate || [];
+        dosareLucru = d.dosareLucru || [];
+        termene = d.termene || [];
+        todos = d.todos || [];
+        jurnal = d.jurnal || [];
+      } else {
+        // Prima logare - nu exista inca date in Supabase; incarca ce era local si urca-l
+        loadData();
+        syncToSupabase();
+      }
+      if (callback) callback();
+    })
+    .catch(function(e) { console.error(e); loadData(); if (callback) callback(); });
+}
 
 // --- Lista instante (toate din WSDL oficial) ---
 var INST = [
@@ -746,6 +888,7 @@ function saveData() {
     else alert('Eroare salvare: ' + e.message);
     throw e;
   }
+  syncToSupabase();
 }
 function loadData() {
   try {
@@ -2075,18 +2218,30 @@ if ('serviceWorker' in navigator) { window.addEventListener('load', function() {
 function init() {
   if (appOK) return;
   appOK = true;
-  loadData();
   checkBkp();
-  renderAll();
-  updTodoDos();
-  updJBadge();
-  setTimeout(function() { autoSync(); }, 2000);
-  setInterval(function() { autoSync(); }, 6 * 60 * 60 * 1000);
-  initNotificari();
-  setInterval(function() { verificaNotificariZilnice(); }, 60 * 60 * 1000);
+  loadFromSupabase(function() {
+    renderAll();
+    updTodoDos();
+    updJBadge();
+    setTimeout(function() { autoSync(); }, 2000);
+    setInterval(function() { autoSync(); }, 6 * 60 * 60 * 1000);
+    initNotificari();
+    setInterval(function() { verificaNotificariZilnice(); }, 60 * 60 * 1000);
+  });
 }
-window.onload = init;
-document.addEventListener('DOMContentLoaded', init);
+
+// Verificam daca exista deja o sesiune activa; altfel afisam ecranul de login
+document.addEventListener('DOMContentLoaded', function() {
+  sb.auth.getSession().then(function(res) {
+    if (res.data && res.data.session) {
+      currentUser = res.data.session.user;
+      hideAuthScreen();
+      init();
+    } else {
+      showAuthScreen();
+    }
+  });
+});
 
 // ================================================================
 // NOTIFICARI PUSH
