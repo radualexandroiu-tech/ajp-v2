@@ -494,7 +494,8 @@ function syncToSupabase() {
       date: payload,
       updated_at: new Date().toISOString()
     }).then(function(res) {
-      if (res.error) console.error('Eroare sincronizare Supabase:', res.error);
+      if (res.error) { alert('EROARE SALVARE SUPABASE:\n\n' + res.error.message); }
+      else { showAlert('Sincronizat cu Supabase!', 's'); }
     });
   }, 1200);
 }
@@ -502,7 +503,7 @@ function syncToSupabase() {
 function loadFromSupabase(callback) {
   sb.from('stare_aplicatie').select('date').eq('user_id', currentUser.id).maybeSingle()
     .then(function(res) {
-      if (res.error) { console.error('Eroare incarcare Supabase:', res.error); loadData(); }
+     if (res.error) { alert('EROARE INCARCARE SUPABASE:\n\n' + res.error.message); loadData(); }
       else if (res.data && res.data.date) {
         var d = res.data.date;
         clienti = d.clienti || [];
