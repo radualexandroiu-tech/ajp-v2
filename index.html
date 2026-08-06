@@ -2256,6 +2256,7 @@ document.addEventListener('DOMContentLoaded', function() {
       currentUser = res.data.session.user;
       hideAuthScreen();
       init();
+      initOneSignal();
     } else {
       showAuthScreen();
     }
