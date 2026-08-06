@@ -493,7 +493,9 @@ function initOneSignal() {
   window.OneSignalDeferred.push(function(OneSignal) {
     OneSignal.init({ appId: ONESIGNAL_APP_ID }).then(function() {
       OneSignal.login(currentUser.id).then(function() {
-        OneSignal.Notifications.requestPermission();
+        OneSignal.Notifications.requestPermission().then(function() {
+          OneSignal.User.PushSubscription.optIn();
+        });
       });
     });
   });
