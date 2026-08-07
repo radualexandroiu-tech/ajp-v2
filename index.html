@@ -464,7 +464,7 @@ function handleAuth(e) {
         showAuthMsg('Cont creat! Verifica email-ul pentru confirmare, apoi intra in cont.', 'ok');
         toggleAuthMode();
       }
-  } else {
+    } else {
       currentUser = res.data.session.user;
       hideAuthScreen();
       init();
@@ -491,11 +491,9 @@ function initOneSignal() {
   if (!currentUser) return;
   window.OneSignalDeferred = window.OneSignalDeferred || [];
   window.OneSignalDeferred.push(function(OneSignal) {
-   OneSignal.init({ appId: ONESIGNAL_APP_ID, serviceWorkerParam: { scope: '/ajp-v2/' }, serviceWorkerPath: 'OneSignalSDKWorker.js' }).then(function() {
+    OneSignal.init({ appId: ONESIGNAL_APP_ID }).then(function() {
       OneSignal.login(currentUser.id).then(function() {
-        OneSignal.Notifications.requestPermission().then(function() {
-          OneSignal.User.PushSubscription.optIn();
-        });
+        OneSignal.Notifications.requestPermission();
       });
     });
   });
@@ -514,8 +512,8 @@ function syncToSupabase() {
       user_id: currentUser.id,
       date: payload,
       updated_at: new Date().toISOString()
-   }).then(function(res) {
-      if (res.error) { console.error('Eroare sincronizare Supabase:', res.error); showAlert('Eroare la sincronizare - verifica conexiunea', 'd'); }
+    }).then(function(res) {
+      if (res.error) console.error('Eroare sincronizare Supabase:', res.error);
     });
   }, 1200);
 }
@@ -523,7 +521,7 @@ function syncToSupabase() {
 function loadFromSupabase(callback) {
   sb.from('stare_aplicatie').select('date').eq('user_id', currentUser.id).maybeSingle()
     .then(function(res) {
-     if (res.error) { console.error('Eroare incarcare Supabase:', res.error); loadData(); }
+      if (res.error) { console.error('Eroare incarcare Supabase:', res.error); loadData(); }
       else if (res.data && res.data.date) {
         var d = res.data.date;
         clienti = d.clienti || [];
@@ -1458,18 +1456,53 @@ function exportPDF() {
   if (trS.length) {
     if (y > 250) { doc.addPage(); y = 20; }
     doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor(30,60,114);
-    doc.text('Solutii sedinte anterioare', ML, y); y += 5;
-    for (var i = 0; i < Math.min(trS.length, 10); i++) {
+    doc.text('Solutii sedinte anterioare (' + trS.length + ')', ML, y); y += 5;
+    for (var i = 0; i < trS.length; i++) {
       if (y > 265) { doc.addPage(); y = 20; }
       var ts2 = trS[i];
       var sl = doc.splitTextToSize('"' + fixP(ts2.solutie) + '"', TW-6);
       var rh2 = 6 + sl.length * 4 + 4;
+      if (y + rh2 > 280) { doc.addPage(); y = 20; }
       doc.setFillColor(248,249,250); doc.roundedRect(ML,y,TW,rh2,2,2,'F');
       doc.setFont('helvetica','bold'); doc.setFontSize(8); doc.setTextColor(70,70,70);
       doc.text(fmtDT(ts2.dataOra) + ' - ' + fixP(ts2.tip), ML+3, y+5);
       doc.setFont('helvetica','italic'); doc.setFontSize(8); doc.setTextColor(80,80,80);
       doc.text(sl, ML+3, y+9); y += rh2 + 2;
     }
+  }
+  var trFaraSol = trT.filter(function(t) { return !t.solutie; });
+  if (trFaraSol.length) {
+    if (y > 255) { doc.addPage(); y = 20; }
+    y += 2; doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor(30,60,114);
+    doc.text('Alte sedinte trecute (' + trFaraSol.length + ')', ML, y); y += 5;
+    doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(90,90,90);
+    for (var i = 0; i < trFaraSol.length; i++) {
+      if (y > 275) { doc.addPage(); y = 20; }
+      var tf = trFaraSol[i];
+      doc.text('- ' + fmtDT(tf.dataOra) + ' (' + fixP(tf.tip) + ')', ML+2, y);
+      y += 4.5;
+    }
+    y += 2;
+  }
+  if (d.sarcini && d.sarcini.length) {
+    if (y > 245) { doc.addPage(); y = 20; }
+    y += 2; doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor(30,60,114);
+    var sarciniActive = d.sarcini.filter(function(s) { return !s.finalizata; });
+    var sarciniDone = d.sarcini.filter(function(s) { return s.finalizata; });
+    doc.text('Sarcini dosar (' + sarciniActive.length + ' active, ' + sarciniDone.length + ' finalizate)', ML, y); y += 5;
+    var sarciniSort = d.sarcini.slice().sort(function(a,b) { return (a.finalizata?1:0) - (b.finalizata?1:0); });
+    for (var i = 0; i < sarciniSort.length; i++) {
+      var sc = sarciniSort[i];
+      var scLines = doc.splitTextToSize((sc.finalizata ? '[FINALIZAT] ' : '[ACTIV] ') + fixP(sc.descriere) + (sc.termen ? ' (termen: ' + fixP(sc.termen) + ')' : ''), TW-6);
+      var scH = scLines.length * 4 + 3;
+      if (y + scH > 280) { doc.addPage(); y = 20; }
+      doc.setFillColor(sc.finalizata ? 240 : 255, sc.finalizata ? 248 : 243, sc.finalizata ? 240 : 205);
+      doc.roundedRect(ML,y,TW,scH,2,2,'F');
+      doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(sc.finalizata?90:120, sc.finalizata?90:80, sc.finalizata?90:20);
+      doc.text(scLines, ML+3, y+4);
+      y += scH + 2;
+    }
+    y += 2;
   }
   if (cli && (cli.onorariuPlatit || cli.onorariuRestant)) {
     if (y > 262) { doc.addPage(); y = 20; }
