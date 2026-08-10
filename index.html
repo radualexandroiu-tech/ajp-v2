@@ -263,7 +263,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
           <div class="fg"><label>Obiect</label><textarea id="dObi" placeholder="Obiectul dosarului"></textarea></div>
           <div class="fg"><label>Link portal</label><input type="url" id="dLnk" placeholder="https://portal.just.ro/..."></div>
           <div class="fg"><label>Stadiu procesual</label><select id="dStd"><option value="Fond">Fond</option><option value="Apel">Apel</option><option value="Recurs">Recurs</option></select></div>
-          <div class="fg"><label>Cale de atac</label><select id="dCal"><option value="Niciuna">Niciuna</option><option value="Apel">Apel</option><option value="Recurs">Recurs</option></select></div>
+          <div class="fg"><label>Cale de atac</label><select id="dCal"><option value="Niciuna">Niciuna</option><option value="Apel">Apel</option><option value="Recurs">Recurs</option><option value="Contestatie">Contestatie</option></select></div>
           <div class="fg"><label>Notite</label><textarea id="dNot" placeholder="Notite generale..."></textarea></div>
           <div style="display:flex;gap:8px"><button type="submit" class="btn btn-p">Salveaza</button><button type="button" class="btn" onclick="hideF('dosForm')" style="background:#e2e8f0;color:#2d3748">Anuleaza</button></div>
         </form>
@@ -1164,6 +1164,7 @@ function autoSync() {
       else if (nT > 0) setUI('ok', 'Portal: ' + nT + ' termene noi!');
       else setUI('ok', 'Portal sincronizat - noutati: 0');
       updJBadge(); renderJurnal();
+      verificaApeluri();
       return;
     }
     var d = cuI[idx]; idx++;
@@ -1211,6 +1212,47 @@ function autoSync() {
   next();
 }
 function syncManual() { setUI('run', 'Sincronizare manuala...'); autoSync(); }
+
+// ================================================================
+// VERIFICARE APEL - dosare terminate care ar putea fi atacate cu apel
+// ================================================================
+function textCaleAtac(cale) {
+  var m = { 'Apel': 'Apel declarat', 'Recurs': 'Recurs declarat', 'Contestatie': 'Contestatie declarata' };
+  return m[cale] || (cale + ' declarat(a)');
+}
+
+function verificaApeluri() {
+  var candidati = dosareTerminate.filter(function(d) {
+    return d.caleAtac && d.caleAtac !== 'Niciuna' && !d.apelDetectat;
+  });
+  if (!candidati.length) return;
+  var idx = 0;
+  function next() {
+    if (idx >= candidati.length) return;
+    var d = candidati[idx]; idx++;
+    apeleazaP({ metoda: 'CautareDosare', numarDosar: d.numar, institutie: null })
+      .then(function(rez) {
+        if (rez && rez.length) {
+          for (var i = 0; i < rez.length; i++) {
+            var gasitInst = rez[i].institutie || '';
+            if (gasitInst && normTxt(gasitInst).indexOf(normTxt(d.instanta).slice(0,10)) === -1) {
+              d.apelDetectat = true;
+              d.apelInstanta = gasitInst;
+              var txt = textCaleAtac(d.caleAtac);
+              addJurnal('eroare', txt + ' - ' + d.numar + ' se afla acum la ' + gasitInst, d.id, null);
+              addNotif('nou', '⚖️ ' + txt + ' - ' + d.numar, 'Dosarul se afla acum la ' + gasitInst, d.id);
+              trimiteNotificare('⚖️ ' + txt, d.numar + ' se afla acum la ' + gasitInst, 'apel-' + d.id);
+              saveData();
+              break;
+            }
+          }
+        }
+        setTimeout(next, 600);
+      })
+      .catch(function() { setTimeout(next, 600); });
+  }
+  next();
+}
 
 // modal portal
 function portalModal(dosarId) {
