@@ -1241,7 +1241,7 @@ function verificaApeluri() {
               var txt = textCaleAtac(d.caleAtac);
               addJurnal('eroare', txt + ' - ' + d.numar + ' se afla acum la ' + gasitInst, d.id, null);
               addNotif('nou', '⚖️ ' + txt + ' - ' + d.numar, 'Dosarul se afla acum la ' + gasitInst, d.id);
-              trimiteNotificare('⚖️ ' + txt, d.numar + ' se afla acum la ' + gasitInst, 'apel-' + d.id);
+              trimiteNotificare('⚖️ ' + txt, d.numar + ' se afla acum la ' + gasitInst, 'apel-' + d.id, d.id);
               saveData();
               break;
             }
@@ -1888,9 +1888,9 @@ function updDash() {
         days === 1 ? '<span class="bzile" style="background:#e91e63">MAINE</span>' :
         '<span class="bzile" style="background:#e91e63">IN ' + days + 'Z</span>';
       if (t.prioritate === 'concediu') {
-        html += '<div class="tc" style="border-left-color:#17a2b8;background:linear-gradient(135deg,#e0f7fa,#e8f5e9);padding:11px"><div style="font-weight:700;font-size:13px;color:#00838f">' + t.titlu + '</div><div style="margin-top:4px">' + db + '</div></div>';
+        html += '<div class="tc" style="border-left-color:#17a2b8;background:linear-gradient(135deg,#e0f7fa,#e8f5e9);padding:11px"><div style="display:flex;align-items:flex-start;gap:9px"><input type="checkbox" onclick="event.stopPropagation();bifeazaDinPanou(' + t.id + ')" style="width:19px;height:19px;margin-top:2px;cursor:pointer;flex-shrink:0"><div style="flex:1"><div style="font-weight:700;font-size:13px;color:#00838f">' + t.titlu + '</div><div style="margin-top:4px">' + db + '</div></div></div></div>';
       } else {
-        html += '<div class="tc" style="border-left-color:' + (days < 0 ? '#8b0000' : '#e91e63') + '"><div class="td">' + t.titlu + '<span class="pb-' + t.prioritate + '">' + pl[t.prioritate] + '</span>' + db + '</div><div class="tdet">' + (t.descriere ? '<div>' + t.descriere + '</div>' : '') + (t.dataLimita ? '<div>Data: ' + fmtDT(t.dataLimita) + '</div>' : '') + (d ? '<div>Dosar: ' + d.numar + '</div>' : '') + '</div></div>';
+        html += '<div class="tc" style="border-left-color:' + (days < 0 ? '#8b0000' : '#e91e63') + '"><div style="display:flex;align-items:flex-start;gap:9px"><input type="checkbox" onclick="event.stopPropagation();bifeazaDinPanou(' + t.id + ')" style="width:19px;height:19px;margin-top:3px;cursor:pointer;flex-shrink:0"><div style="flex:1"><div class="td">' + t.titlu + '<span class="pb-' + t.prioritate + '">' + pl[t.prioritate] + '</span>' + db + '</div><div class="tdet">' + (t.descriere ? '<div>' + t.descriere + '</div>' : '') + (t.dataLimita ? '<div>Data: ' + fmtDT(t.dataLimita) + '</div>' : '') + (d ? '<div>Dosar: ' + d.numar + '</div>' : '') + '</div></div></div></div>';
       }
     }
     tc.innerHTML = html;
@@ -2103,6 +2103,12 @@ function updTodoDos() {
   s.innerHTML = html;
 }
 function togTodo(id) { for (var i = 0; i < todos.length; i++) { if (todos[i].id === id) { todos[i].completed = !todos[i].completed; saveData(); renderTodos(); return; } } }
+function bifeazaDinPanou(id) {
+  if (!confirm('Sigur ai rezolvat acest task?')) return;
+  for (var i = 0; i < todos.length; i++) {
+    if (todos[i].id === id) { todos[i].completed = true; saveData(); updDash(); showAlert('Task finalizat!', 's'); return; }
+  }
+}
 function delTodo(id) { if (!confirm('Stergi?')) return; todos = todos.filter(function(t) { return t.id !== id; }); saveData(); renderTodos(); showAlert('Sters!', 'd'); }
 function filtPrio(p) { var items = document.querySelectorAll('.titem'); for (var i = 0; i < items.length; i++) { items[i].style.display = p === 'all' || items[i].dataset.prio === p ? 'block' : 'none'; } }
 function renderTodos() {
@@ -2323,7 +2329,21 @@ function init() {
     setInterval(function() { autoSync(); }, 6 * 60 * 60 * 1000);
     initNotificari();
     setInterval(function() { verificaNotificariZilnice(); }, 60 * 60 * 1000);
+    deschideDinLink();
   });
+}
+
+// Daca am ajuns aici dintr-o notificare cu ?dosar=ID, deschidem direct fisa acelui dosar
+function deschideDinLink() {
+  var params = new URLSearchParams(window.location.search);
+  var dosarId = params.get('dosar');
+  if (dosarId) {
+    setTimeout(function() {
+      viewFisa(parseInt(dosarId));
+      var urlCurata = window.location.pathname;
+      window.history.replaceState({}, document.title, urlCurata);
+    }, 400);
+  }
 }
 
 // Verificam daca exista deja o sesiune activa; altfel afisam ecranul de login
@@ -2355,22 +2375,24 @@ function initNotificari() {
   }
 }
 
-function trimiteNotificare(titlu, corp, tag) {
+var APP_BASE_URL = 'https://radualexandroiu-tech.github.io/ajp-v2/';
+function trimiteNotificare(titlu, corp, tag, dosarId) {
   if (!('Notification' in window) || Notification.permission !== 'granted') return;
   try {
     if (navigator.serviceWorker && navigator.serviceWorker.controller) {
       navigator.serviceWorker.ready.then(function(reg) {
         reg.showNotification(titlu, {
           body: corp,
-          icon: './icon-192.png',
-          badge: './icon-192.png',
+          icon: APP_BASE_URL + 'icon-192.png',
+          badge: APP_BASE_URL + 'icon-192.png',
           tag: tag || 'ajp-notif',
           renotify: false,
-          silent: false
+          silent: false,
+          data: { dosarId: dosarId || null, url: APP_BASE_URL + (dosarId ? ('?dosar=' + dosarId) : '') }
         });
       });
     } else {
-      new Notification(titlu, { body: corp, icon: './icon-192.png', tag: tag || 'ajp-notif' });
+      new Notification(titlu, { body: corp, icon: APP_BASE_URL + 'icon-192.png', tag: tag || 'ajp-notif' });
     }
   } catch(e) {}
 }
@@ -2395,22 +2417,22 @@ function verificaNotificariZilnice() {
     var numrDosar = dos ? dos.numar : 'dosar';
     var clientDosar = dos ? (dos.client || '') : '';
     if (ziTermen.getTime() === azi.getTime()) {
-      termeneAzi.push({ numar: numrDosar, client: clientDosar, ora: dt });
+      termeneAzi.push({ numar: numrDosar, client: clientDosar, ora: dt, dosarId: t.dosarId });
     } else if (ziTermen.getTime() === maine.getTime()) {
-      termeneMaine.push({ numar: numrDosar, client: clientDosar, ora: dt });
+      termeneMaine.push({ numar: numrDosar, client: clientDosar, ora: dt, dosarId: t.dosarId });
     }
   }
   if (termeneAzi.length === 1) {
     var ta = termeneAzi[0];
     var ora = ta.ora.getHours() + ':' + (ta.ora.getMinutes() < 10 ? '0' : '') + ta.ora.getMinutes();
-    trimiteNotificare('📅 Termen AZI', ta.numar + (ta.client ? ' - ' + ta.client : '') + ' la ora ' + ora, 'termen-azi-' + aziStr);
+    trimiteNotificare('📅 Termen AZI', ta.numar + (ta.client ? ' - ' + ta.client : '') + ' la ora ' + ora, 'termen-azi-' + aziStr, ta.dosarId);
   } else if (termeneAzi.length > 1) {
     trimiteNotificare('📅 ' + termeneAzi.length + ' termene AZI', termeneAzi.map(function(x){ return x.numar; }).join(', '), 'termen-azi-' + aziStr);
   }
   if (termeneMaine.length === 1) {
     var tm = termeneMaine[0];
     var ora2 = tm.ora.getHours() + ':' + (tm.ora.getMinutes() < 10 ? '0' : '') + tm.ora.getMinutes();
-    trimiteNotificare('⏰ Termen MÂINE', tm.numar + (tm.client ? ' - ' + tm.client : '') + ' la ora ' + ora2, 'termen-maine-' + aziStr);
+    trimiteNotificare('⏰ Termen MÂINE', tm.numar + (tm.client ? ' - ' + tm.client : '') + ' la ora ' + ora2, 'termen-maine-' + aziStr, tm.dosarId);
   } else if (termeneMaine.length > 1) {
     trimiteNotificare('⏰ ' + termeneMaine.length + ' termene MÂINE', termeneMaine.map(function(x){ return x.numar; }).join(', '), 'termen-maine-' + aziStr);
   }
