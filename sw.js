@@ -1,7 +1,6 @@
-// Agenda Juridica - Service Worker v4
+// Agenda Juridica - Service Worker v7
 // Schimbarea numelui cache-ului forteaza stergerea versiunii vechi
-
-const CACHE = 'agenda-juridica-v6';
+const CACHE = 'agenda-juridica-v7';
 const FILES = [
   './index.html',
   './manifest.json',
@@ -9,7 +8,6 @@ const FILES = [
   './icon-192.png',
   './icon-512.png',
 ];
-
 self.addEventListener('install', function(e) {
   e.waitUntil(
     caches.open(CACHE).then(function(cache) {
@@ -18,7 +16,6 @@ self.addEventListener('install', function(e) {
   );
   self.skipWaiting();
 });
-
 self.addEventListener('activate', function(e) {
   e.waitUntil(
     caches.keys().then(function(keys) {
@@ -30,7 +27,6 @@ self.addEventListener('activate', function(e) {
   );
   self.clients.claim();
 });
-
 self.addEventListener('fetch', function(e) {
   var url = e.request.url;
   if (url.indexOf('vercel.app') !== -1 ||
@@ -44,13 +40,23 @@ self.addEventListener('fetch', function(e) {
     })
   );
 });
-
 self.addEventListener('notificationclick', function(e) {
   e.notification.close();
+  var data = e.notification.data || {};
+  var targetUrl = data.url || './';
   e.waitUntil(
-    clients.matchAll({ type: 'window' }).then(function(cs) {
-      if (cs.length > 0) { cs[0].focus(); return; }
-      return clients.openWindow('./');
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function(cs) {
+      for (var i = 0; i < cs.length; i++) {
+        var c = cs[i];
+        if ('focus' in c) {
+          c.focus();
+          if ('navigate' in c) {
+            try { c.navigate(targetUrl); } catch (err) {}
+          }
+          return;
+        }
+      }
+      return clients.openWindow(targetUrl);
     })
   );
 });
