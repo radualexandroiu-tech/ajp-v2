@@ -1685,7 +1685,7 @@ function mutaActive(id) {
     if (dosareLucru[i].id === id) {
       var d = dosareLucru[i];
       if (d.isUP) {
-        dosareUP.push({ id: d.id, numar: d.numar, client: d.client, tipClient: d.tipClient||'Suspect', obiect: d.obiect, parchet: d.instanta, procuror: d.procuror||'', politist: d.politist||'', contactAncheta: d.contactAncheta||'', dataAudiere: d.dataAudiere||'', notite: d.notiteDosar||'', dataAdaugare: d.dataAdaugare });
+        dosareUP.push({ id: d.id, numar: d.numar, client: d.client, tipClient: d.tipClient||'Suspect', obiect: d.obiect, parchet: d.instanta, procuror: d.procuror||'', politist: d.politist||'', contactAncheta: d.contactAncheta||'', dataAudiere: d.dataAudiere||'', notite: d.notiteDosar||'', dataAdaugare: d.dataAdaugare, sarcini: d.sarcini||[], mentiuni: d.mentiuni||[], dosarStudiat: d.dosarStudiat||false });
         dosareLucru.splice(i, 1); saveData(); renderLucru(); renderUP();
       } else {
         dosare.push(d); dosareLucru.splice(i, 1); saveData(); renderLucru(); renderDos();
@@ -1700,7 +1700,7 @@ function reactivaTerm(id) {
     if (dosareTerminate[i].id === id) {
       var d = dosareTerminate[i]; delete d.dataTerminare;
       if (d.isUP) {
-        dosareUP.push({ id: d.id, numar: d.numar, client: d.client, tipClient: d.tipClient||'Suspect', obiect: d.obiect, parchet: d.instanta, procuror: d.procuror||'', notite: d.notiteDosar||'', dataAdaugare: d.dataAdaugare });
+        dosareUP.push({ id: d.id, numar: d.numar, client: d.client, tipClient: d.tipClient||'Suspect', obiect: d.obiect, parchet: d.instanta, procuror: d.procuror||'', notite: d.notiteDosar||'', dataAdaugare: d.dataAdaugare, sarcini: d.sarcini||[], mentiuni: d.mentiuni||[], dosarStudiat: d.dosarStudiat||false });
         dosareTerminate.splice(i, 1); saveData(); renderTerm(); renderUP();
       } else {
         dosare.push(d); dosareTerminate.splice(i, 1); saveData(); renderTerm(); renderDos();
@@ -2029,12 +2029,23 @@ function dayDet(ds) {
 // ================================================================
 // FISA DOSAR
 // ================================================================
+function gasesteDosarOriunde(id) {
+  var liste = [dosare, dosareLucru, dosareUP, dosareTerminate];
+  for (var l = 0; l < liste.length; l++) {
+    for (var i = 0; i < liste[l].length; i++) { if (liste[l][i].id === id) return liste[l][i]; }
+  }
+  return null;
+}
+var currentFisaTip = 'normal';
 function viewFisa(dosarId) {
   currentFisaId = dosarId;
+  currentFisaTip = 'normal';
   var allD = dosare.concat(dosareLucru).concat(dosareTerminate);
   var d = null; for (var i = 0; i < allD.length; i++) { if (allD[i].id === dosarId) { d = allD[i]; break; } }
   if (!d) return;
   if (!d.sarcini) d.sarcini = [];
+  if (!d.mentiuni) d.mentiuni = [];
+  var btnPdf = document.getElementById('btnPDF'); if (btnPdf) btnPdf.style.display = 'inline-block';
   var now = new Date();
   var dt = termene.filter(function(t) { return t.dosarId === dosarId; });
   var dv = dt.filter(function(t) { return new Date(t.dataOra) > now; });
@@ -2051,8 +2062,22 @@ function viewFisa(dosarId) {
   var sarcHtml = d.sarcini.length ? d.sarcini.slice().sort(function(a,b) { return a.finalizata-b.finalizata; }).map(function(s, idx) {
     return '<div style="padding:10px;background:' + (s.finalizata ? '#d4edda' : '#fff3cd') + ';margin:6px 0;border-radius:6px;border-left:4px solid ' + (s.finalizata ? '#28a745' : '#ffc107') + ';position:relative"><button onclick="delSarc(' + dosarId + ',' + idx + ')" style="position:absolute;top:7px;right:7px;background:#dc3545;color:#fff;border:none;border-radius:4px;padding:3px 7px;cursor:pointer;font-size:11px">Del</button><div style="display:flex;align-items:center;gap:8px"><input type="checkbox" ' + (s.finalizata ? 'checked' : '') + ' onchange="togSarc(' + dosarId + ',' + idx + ')" style="width:17px;height:17px;cursor:pointer"><div style="' + (s.finalizata ? 'text-decoration:line-through;color:#6c757d' : 'color:#2d3748') + '">' + s.descriere + '</div></div>' + (s.termen ? '<div style="font-size:11px;color:#718096;margin-top:3px;margin-left:25px">Data: ' + fmtDate(s.termen) + '</div>' : '') + '</div>';
   }).join('') : '<p style="color:#718096;font-style:italic">Nu sunt sarcini</p>';
+  var accesHtml = d.isUP
+    ? '<div onclick="toggleStudiat(' + dosarId + ')" style="cursor:pointer;display:inline-block;padding:8px 14px;border-radius:8px;font-weight:700;font-size:13px;margin-bottom:10px;' + (d.dosarStudiat ? 'background:#d4edda;color:#155724' : 'background:#f8d7da;color:#721c24') + '">' + (d.dosarStudiat ? '✅ Dosar studiat (fizic, la organul de cercetare)' : '❌ Dosar nestudiat inca - apasa pentru a bifa') + '</div>'
+    : '<div onclick="toggleAcces(' + dosarId + ')" style="cursor:pointer;display:inline-block;padding:8px 14px;border-radius:8px;font-weight:700;font-size:13px;margin-bottom:10px;' + (d.accesElectronic ? 'background:#d4edda;color:#155724' : 'background:#f8d7da;color:#721c24') + '">' + (d.accesElectronic ? '✅ Am acces la dosarul electronic' : '❌ Nu am acces la dosarul electronic - apasa pentru a bifa') + '</div>';
+  var mentiuniHtml = '';
+  if (d.isUP) {
+    var ment = (d.mentiuni || []).slice().sort(function(a,b) { return new Date(b.data) - new Date(a.data); });
+    var mentListHtml = ment.length ? ment.map(function(m, idx0) {
+      var realIdx = d.mentiuni.indexOf(m);
+      return '<div style="padding:9px;background:#f8f9fa;margin:5px 0;border-radius:6px;border-left:3px solid #6c757d;position:relative"><button onclick="stergeMentiune(' + dosarId + ',' + realIdx + ')" style="position:absolute;top:6px;right:6px;background:#dc3545;color:#fff;border:none;border-radius:4px;padding:2px 6px;cursor:pointer;font-size:10px">Del</button><div style="font-size:11px;color:#718096;font-weight:600">' + fmtDate(m.data) + '</div><div style="font-size:13px;color:#2d3748;margin-top:3px">' + m.text + '</div></div>';
+    }).join('') : '<p style="color:#718096;font-style:italic">Nu sunt mentiuni</p>';
+    mentiuniHtml = '<hr style="border:none;border-top:2px solid #e9ecef;margin:15px 0">' +
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:9px"><h4 style="color:#2d3748;margin:0">Jurnal mentiuni (' + ment.length + ')</h4><button class="btn btn-p btn-sm" onclick="adaugaMentiune(' + dosarId + ')">+ Mentiune</button></div>' + mentListHtml;
+  }
   document.getElementById('fisaContent').innerHTML =
     '<div><h3 style="color:#2d3748;font-size:20px;margin-bottom:10px">Dosar: ' + d.numar + '</h3>' +
+    accesHtml +
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">' +
     '<div><strong>Instanta:</strong> ' + d.instanta + '</div>' +
     '<div><span class="badge b-' + (d.tip||'civil') + '">' + (d.tip||'') + '</span></div>' +
@@ -2067,39 +2092,117 @@ function viewFisa(dosarId) {
     '<hr style="border:none;border-top:2px solid #e9ecef;margin:15px 0">' +
     '<h4 style="color:#6c757d;margin-bottom:9px">Termene trecute (' + dp.length + ')</h4>' + dpHtml +
     (dp.length > 12 ? '<p style="font-size:11px;color:#718096">... si inca ' + (dp.length-12) + '</p>' : '') +
+    mentiuniHtml +
     '<hr style="border:none;border-top:2px solid #e9ecef;margin:15px 0">' +
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:9px"><h4 style="color:#2d3748;margin:0">Sarcini (' + d.sarcini.filter(function(s){return!s.finalizata;}).length + ' active)</h4><button class="btn btn-p btn-sm" onclick="addSarc(' + dosarId + ')">+ Sarcina</button></div>' + sarcHtml +
     (d.linkEcris ? '<div style="text-align:center;margin-top:15px"><a href="' + d.linkEcris + '" target="_blank" class="btn btn-p" onclick="event.preventDefault();window.open(\'' + d.linkEcris + '\',\'_blank\')">Deschide in Portal</a></div>' : '');
   document.getElementById('fisaModal').style.display = 'block';
 }
+
+// ================================================================
+// FISA UP (urmarire penala)
+// ================================================================
+function viewFisaUP(dosarId) {
+  currentFisaId = dosarId;
+  currentFisaTip = 'up';
+  var d = null; for (var i = 0; i < dosareUP.length; i++) { if (dosareUP[i].id === dosarId) { d = dosareUP[i]; break; } }
+  if (!d) return;
+  if (!d.sarcini) d.sarcini = [];
+  if (!d.mentiuni) d.mentiuni = [];
+  var btnPdf = document.getElementById('btnPDF'); if (btnPdf) btnPdf.style.display = 'none';
+  var studiatHtml = '<div onclick="toggleStudiat(' + dosarId + ')" style="cursor:pointer;display:inline-block;padding:8px 14px;border-radius:8px;font-weight:700;font-size:13px;margin-bottom:10px;' + (d.dosarStudiat ? 'background:#d4edda;color:#155724' : 'background:#f8d7da;color:#721c24') + '">' + (d.dosarStudiat ? '✅ Dosar studiat (fizic, la organul de cercetare)' : '❌ Dosar nestudiat inca - apasa pentru a bifa') + '</div>';
+  var sarcHtml = d.sarcini.length ? d.sarcini.slice().sort(function(a,b) { return a.finalizata-b.finalizata; }).map(function(s, idx) {
+    return '<div style="padding:10px;background:' + (s.finalizata ? '#d4edda' : '#fff3cd') + ';margin:6px 0;border-radius:6px;border-left:4px solid ' + (s.finalizata ? '#28a745' : '#ffc107') + ';position:relative"><button onclick="delSarc(' + dosarId + ',' + idx + ')" style="position:absolute;top:7px;right:7px;background:#dc3545;color:#fff;border:none;border-radius:4px;padding:3px 7px;cursor:pointer;font-size:11px">Del</button><div style="display:flex;align-items:center;gap:8px"><input type="checkbox" ' + (s.finalizata ? 'checked' : '') + ' onchange="togSarc(' + dosarId + ',' + idx + ')" style="width:17px;height:17px;cursor:pointer"><div style="' + (s.finalizata ? 'text-decoration:line-through;color:#6c757d' : 'color:#2d3748') + '">' + s.descriere + '</div></div>' + (s.termen ? '<div style="font-size:11px;color:#718096;margin-top:3px;margin-left:25px">Data: ' + fmtDate(s.termen) + '</div>' : '') + '</div>';
+  }).join('') : '<p style="color:#718096;font-style:italic">Nu sunt sarcini</p>';
+  var ment = (d.mentiuni || []).slice().sort(function(a,b) { return new Date(b.data) - new Date(a.data); });
+  var mentListHtml = ment.length ? ment.map(function(m) {
+    var realIdx = d.mentiuni.indexOf(m);
+    return '<div style="padding:9px;background:#f8f9fa;margin:5px 0;border-radius:6px;border-left:3px solid #6c757d;position:relative"><button onclick="stergeMentiune(' + dosarId + ',' + realIdx + ')" style="position:absolute;top:6px;right:6px;background:#dc3545;color:#fff;border:none;border-radius:4px;padding:2px 6px;cursor:pointer;font-size:10px">Del</button><div style="font-size:11px;color:#718096;font-weight:600">' + fmtDate(m.data) + '</div><div style="font-size:13px;color:#2d3748;margin-top:3px">' + m.text + '</div></div>';
+  }).join('') : '<p style="color:#718096;font-style:italic">Nu sunt mentiuni</p>';
+  document.getElementById('fisaContent').innerHTML =
+    '<div><h3 style="color:#2d3748;font-size:20px;margin-bottom:10px">Dosar UP: ' + d.numar + '</h3>' +
+    studiatHtml +
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">' +
+    '<div><strong>Parchet:</strong> ' + d.parchet + '</div>' +
+    '<div><strong>Client:</strong> ' + d.client + ' (' + (d.tipClient||'') + ')</div>' +
+    (d.procuror ? '<div><strong>Procuror:</strong> ' + d.procuror + '</div>' : '') +
+    (d.politist ? '<div><strong>Politist:</strong> ' + d.politist + '</div>' : '') +
+    (d.contactAncheta ? '<div><strong>Contact ancheta:</strong> ' + d.contactAncheta + '</div>' : '') +
+    (d.dataAudiere ? '<div><strong>Data audiere:</strong> ' + fmtDate(d.dataAudiere) + '</div>' : '') +
+    '</div>' +
+    (d.obiect ? '<div style="margin-bottom:9px"><strong>Obiect:</strong> ' + d.obiect + '</div>' : '') +
+    (d.notite ? '<div style="padding:11px;background:#f8f9fa;border-radius:8px;border-left:4px solid #6c757d;margin-bottom:9px"><strong>Notite:</strong><br>' + d.notite + '</div>' : '') +
+    '</div>' +
+    '<hr style="border:none;border-top:2px solid #e9ecef;margin:15px 0">' +
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:9px"><h4 style="color:#2d3748;margin:0">Jurnal mentiuni (' + ment.length + ')</h4><button class="btn btn-p btn-sm" onclick="adaugaMentiune(' + dosarId + ')">+ Mentiune</button></div>' + mentListHtml +
+    '<hr style="border:none;border-top:2px solid #e9ecef;margin:15px 0">' +
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:9px"><h4 style="color:#2d3748;margin:0">Sarcini (' + d.sarcini.filter(function(s){return!s.finalizata;}).length + ' active)</h4><button class="btn btn-p btn-sm" onclick="addSarc(' + dosarId + ')">+ Sarcina</button></div>' + sarcHtml;
+  document.getElementById('fisaModal').style.display = 'block';
+}
+
+function toggleAcces(id) {
+  var d = gasesteDosarOriunde(id);
+  if (!d) return;
+  d.accesElectronic = !d.accesElectronic;
+  saveData();
+  viewFisa(id);
+}
+function toggleStudiat(id) {
+  var d = gasesteDosarOriunde(id);
+  if (!d) return;
+  d.dosarStudiat = !d.dosarStudiat;
+  saveData();
+  if (currentFisaTip === 'up') viewFisaUP(id); else viewFisa(id);
+}
+function adaugaMentiune(id) {
+  var d = gasesteDosarOriunde(id);
+  if (!d) return;
+  var text = prompt('Mentiune noua pentru ' + d.numar + ':');
+  if (!text) return;
+  if (!d.mentiuni) d.mentiuni = [];
+  d.mentiuni.push({ data: new Date().toISOString(), text: text });
+  saveData();
+  if (currentFisaTip === 'up') viewFisaUP(id); else viewFisa(id);
+}
+function stergeMentiune(id, idx) {
+  if (!confirm('Stergi aceasta mentiune?')) return;
+  var d = gasesteDosarOriunde(id);
+  if (!d || !d.mentiuni) return;
+  d.mentiuni.splice(idx, 1);
+  saveData();
+  if (currentFisaTip === 'up') viewFisaUP(id); else viewFisa(id);
+}
+
 function addSarc(id) {
   document.getElementById('fisaModal').style.display = 'none';
-  var d = null; for (var i = 0; i < dosare.length; i++) { if (dosare[i].id === id) { d = dosare[i]; break; } }
-  if (!d) { for (var i = 0; i < dosareLucru.length; i++) { if (dosareLucru[i].id === id) { d = dosareLucru[i]; break; } } }
+  var d = gasesteDosarOriunde(id);
   if (!d) return;
   var desc = prompt('Sarcina pentru ' + d.numar + '\n\nDescriere:');
   if (!desc) return;
   var ter = prompt('Termen (YYYY-MM-DD - optional)') || '';
   if (!d.sarcini) d.sarcini = [];
   d.sarcini.push({ descriere: desc, termen: ter, finalizata: false });
-  saveData(); setTimeout(function() { viewFisa(id); }, 300);
+  saveData();
+  var tip = currentFisaTip;
+  setTimeout(function() { if (tip === 'up') viewFisaUP(id); else viewFisa(id); }, 300);
 }
 function delSarc(id, idx) {
   if (!confirm('Stergi?')) return;
-  var d = null; for (var i = 0; i < dosare.length; i++) { if (dosare[i].id === id) { d = dosare[i]; break; } }
-  if (!d) { for (var i = 0; i < dosareLucru.length; i++) { if (dosareLucru[i].id === id) { d = dosareLucru[i]; break; } } }
+  var d = gasesteDosarOriunde(id);
   if (!d) return;
-  d.sarcini.splice(idx, 1); saveData(); viewFisa(id);
+  d.sarcini.splice(idx, 1); saveData();
+  if (currentFisaTip === 'up') viewFisaUP(id); else viewFisa(id);
 }
 function togSarc(id, idx) {
-  var d = null; for (var i = 0; i < dosare.length; i++) { if (dosare[i].id === id) { d = dosare[i]; break; } }
-  if (!d) { for (var i = 0; i < dosareLucru.length; i++) { if (dosareLucru[i].id === id) { d = dosareLucru[i]; break; } } }
+  var d = gasesteDosarOriunde(id);
   if (!d) return;
-  d.sarcini[idx].finalizata = !d.sarcini[idx].finalizata; saveData(); viewFisa(id);
+  d.sarcini[idx].finalizata = !d.sarcini[idx].finalizata; saveData();
+  if (currentFisaTip === 'up') viewFisaUP(id); else viewFisa(id);
 }
 
 // ================================================================
 // TODO
+
 // ================================================================
 function saveTodo(e) {
   e.preventDefault();
@@ -2251,7 +2354,7 @@ function upInLucru(id) {
   for (var i = 0; i < dosareUP.length; i++) {
     if (dosareUP[i].id === id) {
       var u = dosareUP[i];
-      dosareLucru.push({ id: u.id, numar: u.numar, client: u.client, instanta: u.parchet, tip: 'penal', obiect: u.obiect, linkEcris: '', isUP: true, tipClient: u.tipClient, procuror: u.procuror, politist: u.politist, contactAncheta: u.contactAncheta, dataAudiere: u.dataAudiere, notiteDosar: u.notite, stadiuProcesual: 'Urmarire Penala', caleAtac: 'Niciuna', sedinte: [], sarcini: [], dataAdaugare: u.dataAdaugare || new Date().toISOString() });
+      dosareLucru.push({ id: u.id, numar: u.numar, client: u.client, instanta: u.parchet, tip: 'penal', obiect: u.obiect, linkEcris: '', isUP: true, tipClient: u.tipClient, procuror: u.procuror, politist: u.politist, contactAncheta: u.contactAncheta, dataAudiere: u.dataAudiere, notiteDosar: u.notite, stadiuProcesual: 'Urmarire Penala', caleAtac: 'Niciuna', sedinte: [], sarcini: u.sarcini||[], mentiuni: u.mentiuni||[], dosarStudiat: u.dosarStudiat||false, dataAdaugare: u.dataAdaugare || new Date().toISOString() });
       dosareUP.splice(i, 1); saveData(); renderUP(); renderLucru(); showAlert('Mutat in lucru!', 's'); return;
     }
   }
@@ -2261,7 +2364,7 @@ function upTerminat(id) {
   for (var i = 0; i < dosareUP.length; i++) {
     if (dosareUP[i].id === id) {
       var u = dosareUP[i];
-      dosareTerminate.push({ id: u.id, numar: u.numar, client: u.client, instanta: u.parchet, tip: 'penal', isUP: true, notiteDosar: u.notite, dataTerminare: new Date().toISOString() });
+      dosareTerminate.push({ id: u.id, numar: u.numar, client: u.client, instanta: u.parchet, tip: 'penal', isUP: true, notiteDosar: u.notite, sarcini: u.sarcini||[], mentiuni: u.mentiuni||[], dosarStudiat: u.dosarStudiat||false, dataTerminare: new Date().toISOString() });
       dosareUP.splice(i, 1); saveData(); renderUP(); renderTerm(); showAlert('Terminat!', 's'); return;
     }
   }
@@ -2275,13 +2378,14 @@ function renderUP() {
     html += '<div class="dcard" style="border-left:4px solid #6a1b9a">' +
       '<div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:9px">' +
       '<div><div class="dnr">' + d.numar + '</div><span class="badge" style="background:#f3e5f5;color:#6a1b9a">UP</span></div>' +
-      '<div style="display:flex;gap:4px;flex-wrap:wrap"><button class="btn btn-p btn-sm" onclick="editUP(' + d.id + ')">Edit</button><button class="btn btn-sm" onclick="upInLucru(' + d.id + ')" style="background:#ffc107;color:#000">Lucru</button><button class="btn btn-s btn-sm" onclick="upTerminat(' + d.id + ')">Term.</button><button class="btn btn-d btn-sm" onclick="delUP(' + d.id + ')">Del</button></div></div>' +
+      '<div style="display:flex;gap:4px;flex-wrap:wrap"><button class="btn btn-p btn-sm" onclick="viewFisaUP(' + d.id + ')">Fisa</button><button class="btn btn-p btn-sm" onclick="editUP(' + d.id + ')">Edit</button><button class="btn btn-sm" onclick="upInLucru(' + d.id + ')" style="background:#ffc107;color:#000">Lucru</button><button class="btn btn-s btn-sm" onclick="upTerminat(' + d.id + ')">Term.</button><button class="btn btn-d btn-sm" onclick="delUP(' + d.id + ')">Del</button></div></div>' +
       '<div class="di"><strong>Client:</strong> ' + d.client + ' - <span style="color:' + (d.tipClient === 'Suspect' || d.tipClient === 'Inculpat' ? '#dc3545' : '#28a745') + ';font-weight:600">' + d.tipClient + '</span></div>' +
       (d.obiect ? '<div class="di"><strong>Obiect:</strong> ' + d.obiect + '</div>' : '') +
       '<div class="di"><strong>Parchet:</strong> ' + d.parchet + '</div>' +
       (d.procuror ? '<div class="di"><strong>Procuror:</strong> ' + d.procuror + '</div>' : '') +
       (d.dataAudiere ? '<div style="margin-top:8px;padding:8px;background:#fff3cd;border-radius:6px;border-left:3px solid #ffc107"><strong style="color:#856404">Audiere:</strong> ' + fmtDate(d.dataAudiere) + '</div>' : '') +
       (d.notite ? '<div style="margin-top:8px;padding:8px;background:#f8f9fa;border-radius:6px;font-size:13px"><strong>Notite:</strong> ' + d.notite + '</div>' : '') +
+      '<div class="di" style="margin-top:6px"><span style="font-size:11px;padding:2px 8px;border-radius:10px;font-weight:600;' + (d.dosarStudiat ? 'background:#d4edda;color:#155724' : 'background:#f8d7da;color:#721c24') + '">' + (d.dosarStudiat ? '✅ Studiat' : '❌ Nestudiat') + '</span></div>' +
       '</div>';
   }
   c.innerHTML = html;
@@ -2408,21 +2512,13 @@ var APP_BASE_URL = 'https://radualexandroiu-tech.github.io/ajp-v2/';
 function trimiteNotificare(titlu, corp, tag, dosarId) {
   if (!('Notification' in window) || Notification.permission !== 'granted') return;
   try {
-    if (navigator.serviceWorker && navigator.serviceWorker.controller) {
-      navigator.serviceWorker.ready.then(function(reg) {
-        reg.showNotification(titlu, {
-          body: corp,
-          icon: APP_BASE_URL + 'icon-192.png',
-          badge: APP_BASE_URL + 'icon-192.png',
-          tag: tag || 'ajp-notif',
-          renotify: false,
-          silent: false,
-          data: { dosarId: dosarId || null, url: APP_BASE_URL + (dosarId ? ('?dosar=' + dosarId) : '') }
-        });
-      });
-    } else {
-      new Notification(titlu, { body: corp, icon: APP_BASE_URL + 'icon-192.png', tag: tag || 'ajp-notif' });
-    }
+    var targetUrl = APP_BASE_URL + (dosarId ? ('?dosar=' + dosarId) : '');
+    var notif = new Notification(titlu, { body: corp, icon: APP_BASE_URL + 'icon-192.png', tag: tag || 'ajp-notif' });
+    notif.onclick = function() {
+      window.focus();
+      window.location.href = targetUrl;
+      notif.close();
+    };
   } catch(e) {}
 }
 
