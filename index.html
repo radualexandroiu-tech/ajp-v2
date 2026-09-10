@@ -262,7 +262,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
           <div class="fg"><label>Client</label><input type="text" id="dCli" placeholder="Nume client"></div>
           <div class="fg"><label>Obiect</label><textarea id="dObi" placeholder="Obiectul dosarului"></textarea></div>
           <div class="fg"><label>Link portal</label><input type="url" id="dLnk" placeholder="https://portal.just.ro/..."></div>
-          <div class="fg"><label>Stadiu procesual</label><select id="dStd"><option value="Fond">Fond</option><option value="Apel">Apel</option><option value="Recurs">Recurs</option><option value="Contestatie">Contestatie</option></select></div>
+          <div class="fg"><label>Stadiu procesual</label><select id="dStd"><option value="Fond">Fond</option><option value="Apel">Apel</option><option value="Recurs">Recurs</option></select></div>
           <div class="fg"><label>Cale de atac</label><select id="dCal"><option value="Niciuna">Niciuna</option><option value="Apel">Apel</option><option value="Recurs">Recurs</option><option value="Contestatie">Contestatie</option></select></div>
           <div class="fg"><label>Notite</label><textarea id="dNot" placeholder="Notite generale..."></textarea></div>
           <div style="display:flex;gap:8px"><button type="submit" class="btn btn-p">Salveaza</button><button type="button" class="btn" onclick="hideF('dosForm')" style="background:#e2e8f0;color:#2d3748">Anuleaza</button></div>
@@ -1716,32 +1716,9 @@ function hasAzi(dosarId) {
   }
   return false;
 }
-
-// ================================================================
-// MUTARE DOSAR LA INSTANTA DE APEL/RECURS/CONTESTATIE
-// ================================================================
-function mutaLaInstantaNoua(id) {
-  var idx = -1, d = null;
-  for (var i = 0; i < dosareTerminate.length; i++) { if (dosareTerminate[i].id === id) { idx = i; d = dosareTerminate[i]; break; } }
-  if (!d || !d.apelInstanta) return;
-  if (!confirm('Muti dosarul ' + d.numar + ' la ' + d.apelInstanta + '?\n\nInstanta veche: ' + d.instanta + '\nStadiu nou: ' + d.caleAtac + '\n\nTot istoricul (sarcini, notite, termene, solutii) va fi pastrat.')) return;
-  var instantaVeche = d.instanta;
-  var stadiuNou = d.caleAtac || 'Apel';
-  d.instanta = d.apelInstanta;
-  d.stadiuProcesual = stadiuNou;
-  d.caleAtac = 'Niciuna';
-  d.apelDetectat = false;
-  delete d.apelInstanta;
-  delete d.dataTerminare;
-  dosare.push(d);
-  dosareTerminate.splice(idx, 1);
-  addJurnal('sync', stadiuNou + ' - ' + d.numar + ' mutat de la ' + instantaVeche + ' la ' + d.instanta, d.id, null);
-  saveData();
-  renderTerm(); renderDos(); updDash();
-  showAlert('Dosar mutat la ' + d.instanta + '!', 's');
-}
-
 function cardDos(d, src) {
+  var now = new Date();
+  var dt = termene.filter(function(t) { return t.dosarId === d.id; });
   var nxtArr = dt.filter(function(t) { return new Date(t.dataOra) > now; });
   nxtArr.sort(function(a,b) { return new Date(a.dataOra)-new Date(b.dataOra); });
   var nxt = nxtArr.length ? nxtArr[0] : null;
@@ -1754,8 +1731,6 @@ function cardDos(d, src) {
   if (src === 'dos') acts = '<button class="btn btn-p btn-sm" onclick="viewFisa(' + d.id + ')">Fisa</button><button class="btn btn-p btn-sm" onclick="editDos(' + d.id + ',\'dos\')">Edit</button><button class="btn btn-p btn-sm" onclick="addTrQ(' + d.id + ')">+Term</button><button class="btn btn-t btn-sm" onclick="portalModal(' + d.id + ')">Portal</button><button class="btn btn-sm" onclick="mutaLucru(' + d.id + ')" style="background:#ffc107;color:#000">Lucru</button><button class="btn btn-s btn-sm" onclick="terminaDos(' + d.id + ')">Term.</button><button class="btn btn-d btn-sm" onclick="delDos(' + d.id + ')">Del</button>';
   else if (src === 'l') acts = '<button class="btn btn-p btn-sm" onclick="editDos(' + d.id + ',\'l\')">Edit</button><button class="btn btn-t btn-sm" onclick="portalModal(' + d.id + ')">Portal</button><button class="btn btn-p btn-sm" onclick="mutaActive(' + d.id + ')">' + (d.isUP ? 'UP' : 'Active') + '</button><button class="btn btn-d btn-sm" onclick="delL(' + d.id + ')">Del</button>';
   else if (src === 't') acts = '<button class="btn btn-p btn-sm" onclick="editDos(' + d.id + ',\'t\')">Edit</button><button class="btn btn-p btn-sm" onclick="reactivaTerm(' + d.id + ')">Reactiveaza</button><button class="btn btn-d btn-sm" onclick="delT(' + d.id + ')">Del</button>';
-  var apelBtn = (src === 't' && d.apelDetectat && d.apelInstanta) ?
-    '<div style="margin-top:9px"><button class="btn btn-sm" style="background:#6a1b9a;color:#fff;width:100%" onclick="mutaLaInstantaNoua(' + d.id + ')">⚖️ Muta la ' + d.apelInstanta + '</button></div>' : '';
   var tipCls = 'b-' + (d.tip || 'civil');
   var nxtHtml = nxt ?
     '<div style="margin-top:8px;padding:9px;background:#E3F2FD;border-left:4px solid #2196F3;border-radius:6px"><strong style="color:#1976D2;font-size:12px">Urmator:</strong><div style="color:#0D47A1;font-weight:700;margin-top:2px">' + fmtDT(nxt.dataOra) + '</div><div style="color:#1976D2;font-size:11px">' + nxt.tip + (nxt.sursa === 'portal.just.ro' ? ' (portal)' : '') + '</div></div>' :
@@ -1773,7 +1748,6 @@ function cardDos(d, src) {
     (d.linkEcris ? '<div class="di"><strong>Link:</strong> <a href="' + d.linkEcris + '" target="_blank" onclick="event.preventDefault();window.open(\'' + d.linkEcris + '\',\'_blank\')">Portal</a></div>' : '') +
     '<div class="di"><strong>Termene:</strong> ' + dt.length + '</div>' +
     nxtHtml + dtStr +
-    apelBtn +
     '<div class="dact">' + acts + '</div></div>';
 }
 function renderDos() {
@@ -2037,9 +2011,7 @@ function dayDet(ds) {
       html += '<h4 style="color:#2a5298;margin-bottom:9px">Termene (' + dt.length + ')</h4>';
       for (var i = 0; i < dt.length; i++) {
         var t = dt[i]; var d = null; for (var j = 0; j < allD.length; j++) { if (allD[j].id === t.dosarId) { d = allD[j]; break; } }
-        var tipBadge = d ? '<span class="badge b-' + (d.tip||'civil') + '" style="margin-left:6px">' + (d.tip||'') + '</span>' : '';
-        var clickAttr = d ? ' style="cursor:pointer" onclick="document.getElementById(\'dayMod\').remove();viewFisa(' + d.id + ')"' : '';
-        html += '<div' + clickAttr + ' style="background:#E3F2FD;border-left:4px solid #2196F3;padding:10px;border-radius:8px;margin-bottom:8px;' + (d ? 'cursor:pointer' : '') + '"><div style="font-weight:600;color:#1976D2">' + fmtDT(t.dataOra) + tipBadge + '</div><div style="font-size:13px;margin-top:3px">' + (d ? d.numar : 'N/A') + ' - ' + t.tip + '</div>' + (d ? '<div style="font-size:12px;color:#1976D2;margin-top:2px">' + d.instanta + '</div>' : '') + (t.solutie ? '<div style="font-size:12px;color:#2e7d32;margin-top:4px;font-style:italic">&quot;' + t.solutie + '&quot;</div>' : '') + (d ? '<div style="font-size:11px;color:#1565C0;margin-top:5px;font-weight:600">Apasa pentru fisa dosarului &#8594;</div>' : '') + '</div>';
+        html += '<div style="background:#E3F2FD;border-left:4px solid #2196F3;padding:10px;border-radius:8px;margin-bottom:8px"><div style="font-weight:600;color:#1976D2">' + fmtDT(t.dataOra) + '</div><div style="font-size:13px">' + (d ? d.numar : 'N/A') + ' - ' + t.tip + '</div>' + (t.solutie ? '<div style="font-size:12px;color:#2e7d32;margin-top:4px;font-style:italic">&quot;' + t.solutie + '&quot;</div>' : '') + '</div>';
       }
     }
     if (dtd.length) {
@@ -2073,7 +2045,6 @@ function viewFisa(dosarId) {
   if (!d) return;
   if (!d.sarcini) d.sarcini = [];
   if (!d.mentiuni) d.mentiuni = [];
-  if (!d.parti) d.parti = [];
   var btnPdf = document.getElementById('btnPDF'); if (btnPdf) btnPdf.style.display = 'inline-block';
   var now = new Date();
   var dt = termene.filter(function(t) { return t.dosarId === dosarId; });
@@ -2094,10 +2065,6 @@ function viewFisa(dosarId) {
   var accesHtml = d.isUP
     ? '<div onclick="toggleStudiat(' + dosarId + ')" style="cursor:pointer;display:inline-block;padding:8px 14px;border-radius:8px;font-weight:700;font-size:13px;margin-bottom:10px;' + (d.dosarStudiat ? 'background:#d4edda;color:#155724' : 'background:#f8d7da;color:#721c24') + '">' + (d.dosarStudiat ? '✅ Dosar studiat (fizic, la organul de cercetare)' : '❌ Dosar nestudiat inca - apasa pentru a bifa') + '</div>'
     : '<div onclick="toggleAcces(' + dosarId + ')" style="cursor:pointer;display:inline-block;padding:8px 14px;border-radius:8px;font-weight:700;font-size:13px;margin-bottom:10px;' + (d.accesElectronic ? 'background:#d4edda;color:#155724' : 'background:#f8d7da;color:#721c24') + '">' + (d.accesElectronic ? '✅ Am acces la dosarul electronic' : '❌ Nu am acces la dosarul electronic - apasa pentru a bifa') + '</div>';
-  var partiListHtml = d.parti.length ? d.parti.map(function(p, idx) {
-    return '<span style="display:inline-flex;align-items:center;gap:5px;background:#e6f0ff;color:#2a5298;padding:4px 6px 4px 11px;border-radius:20px;font-size:12px;margin:2px 4px 2px 0"><span>' + p.nume + ' <em style="opacity:0.75">(' + p.calitate + ')</em></span><button onclick="stergeParte(' + dosarId + ',' + idx + ')" style="background:none;border:none;color:#2a5298;cursor:pointer;font-size:13px;padding:0 3px;line-height:1">&#10005;</button></span>';
-  }).join('') : '<p style="color:#718096;font-style:italic;font-size:13px">Nicio parte adaugata</p>';
-  var partiHtml = '<div style="margin-bottom:12px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px"><strong style="font-size:13px;color:#2d3748">Parti (' + d.parti.length + ')</strong><button class="btn btn-p btn-sm" onclick="adaugaParte(' + dosarId + ')">+ Parte</button></div><div>' + partiListHtml + '</div></div>';
   var mentiuniHtml = '';
   if (d.isUP) {
     var ment = (d.mentiuni || []).slice().sort(function(a,b) { return new Date(b.data) - new Date(a.data); });
@@ -2118,7 +2085,6 @@ function viewFisa(dosarId) {
     '<div><strong>Stadiu:</strong> ' + (d.stadiuProcesual||'Fond') + '</div>' +
     '</div>' +
     (d.obiect ? '<div style="margin-bottom:9px"><strong>Obiect:</strong> ' + d.obiect + '</div>' : '') +
-    partiHtml +
     (d.notiteDosar ? '<div style="padding:11px;background:#f8f9fa;border-radius:8px;border-left:4px solid #6c757d;margin-bottom:9px"><strong>Notite:</strong><br>' + d.notiteDosar + '</div>' : '') +
     '</div>' +
     '<hr style="border:none;border-top:2px solid #e9ecef;margin:15px 0">' +
@@ -2188,27 +2154,6 @@ function toggleStudiat(id) {
   saveData();
   if (currentFisaTip === 'up') viewFisaUP(id); else viewFisa(id);
 }
-function adaugaParte(id) {
-  var d = gasesteDosarOriunde(id);
-  if (!d) return;
-  var nume = prompt('Nume parte:');
-  if (!nume) return;
-  var calitate = prompt('Calitate (ex: Reclamant, Parat, Intervenient):');
-  if (!calitate) return;
-  if (!d.parti) d.parti = [];
-  d.parti.push({ nume: nume, calitate: calitate });
-  saveData();
-  viewFisa(id);
-}
-function stergeParte(id, idx) {
-  if (!confirm('Stergi aceasta parte?')) return;
-  var d = gasesteDosarOriunde(id);
-  if (!d || !d.parti) return;
-  d.parti.splice(idx, 1);
-  saveData();
-  viewFisa(id);
-}
-
 function adaugaMentiune(id) {
   var d = gasesteDosarOriunde(id);
   if (!d) return;
