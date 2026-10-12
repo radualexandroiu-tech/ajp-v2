@@ -311,7 +311,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <div id="todo" class="tab-content">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:7px">
         <h2 style="color:#2d3748">Task-uri</h2>
-        <button class="btn btn-p btn-sm" onclick="showF('todoForm')">+ Task</button>
+        <button class="btn btn-p btn-sm" onclick="newTodo()">+ Task</button>
       </div>
       <div id="todoForm" style="display:none" class="fpanel"><h3 id="todoFT">Task nou</h3>
         <form onsubmit="saveTodo(event)">
@@ -319,7 +319,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
           <div class="fg"><label>Descriere</label><textarea id="tDes" placeholder="Detalii..."></textarea></div>
           <div class="fg"><label>Prioritate *</label><select id="tPri" required><option value="">Selecteaza...</option><option value="urmarit">De urmarit</option><option value="urgent">Urgent</option><option value="foarte-urgent">Foarte urgent</option><option value="concediu">Concediu</option></select></div>
           <div class="fg"><label>Data si ora limita</label><input type="datetime-local" id="tDat"></div>
-          <div class="fg"><label>Dosar asociat</label><select id="tDos"><option value="">Fara dosar asociat</option></select></div>
+          <div class="fg"><label>Dosar asociat</label><select id="tDos" onchange="toggleTDosManual()"><option value="">Fara dosar asociat</option></select>
+            <input type="text" id="tDosManual" placeholder="Numar dosar (introdus manual)" style="display:none;margin-top:7px;width:100%;padding:11px;border:2px solid #e2e8f0;border-radius:8px;font-size:14px">
+          </div>
           <div style="display:flex;gap:8px"><button type="submit" class="btn btn-p">Salveaza</button><button type="button" class="btn" onclick="hideF('todoForm')" style="background:#e2e8f0;color:#2d3748">Anuleaza</button></div>
         </form>
       </div>
@@ -1934,7 +1936,7 @@ function updDash() {
     var html = '';
     for (var i = 0; i < urg.length; i++) {
       var t = urg[i];
-      var allD = dosare.concat(dosareLucru);
+      var allD = dosare.concat(dosareLucru).concat(dosareUP).concat(dosareTerminate);
       var d = null; for (var j = 0; j < allD.length; j++) { if (allD[j].id === t.dosarId) { d = allD[j]; break; } }
       var td = new Date(t.dataLimita);
       var ts = new Date(td.getFullYear(), td.getMonth(), td.getDate());
@@ -1947,7 +1949,7 @@ function updDash() {
       if (t.prioritate === 'concediu') {
         html += '<div class="tc" style="border-left-color:#17a2b8;background:linear-gradient(135deg,#e0f7fa,#e8f5e9);padding:11px"><div style="display:flex;align-items:flex-start;gap:9px">' + chk + '<div style="flex:1"><div style="font-weight:700;font-size:13px;color:#00838f">' + t.titlu + '</div><div style="margin-top:4px">' + db + '</div></div></div></div>';
       } else {
-        html += '<div class="tc" style="border-left-color:' + (days < 0 ? '#8b0000' : '#e91e63') + '"><div style="display:flex;align-items:flex-start;gap:9px">' + chk + '<div style="flex:1"><div class="td">' + t.titlu + '<span class="pb-' + t.prioritate + '">' + pl[t.prioritate] + '</span>' + db + '</div><div class="tdet">' + (t.descriere ? '<div>' + t.descriere + '</div>' : '') + (t.dataLimita ? '<div>Data: ' + fmtDT(t.dataLimita) + '</div>' : '') + (d ? '<div>Dosar: ' + d.numar + '</div>' : '') + '</div></div></div></div>';
+        html += '<div class="tc" style="border-left-color:' + (days < 0 ? '#8b0000' : '#e91e63') + '"><div style="display:flex;align-items:flex-start;gap:9px">' + chk + '<div style="flex:1"><div class="td">' + t.titlu + '<span class="pb-' + t.prioritate + '">' + pl[t.prioritate] + '</span>' + db + '</div><div class="tdet">' + (t.descriere ? '<div>' + t.descriere + '</div>' : '') + (t.dataLimita ? '<div>Data: ' + fmtDT(t.dataLimita) + '</div>' : '') + (d ? '<div>Dosar: ' + d.numar + '</div>' : (t.dosarManual ? '<div>Dosar: ' + t.dosarManual + '</div>' : '')) + '</div></div></div></div>';
       }
     }
     tc.innerHTML = html;
@@ -1957,18 +1959,39 @@ function updDash() {
     var ts = new Date(td.getFullYear(), td.getMonth(), td.getDate());
     var d = Math.round((ts - today) / 864e5);
     return d >= 0 && d <= termeneZ;
-  });
-  uD.sort(function(a,b) { return new Date(a.dataOra)-new Date(b.dataOra); });
+  }).map(function(t) { return { dataOra: t.dataOra, isAudiereUP: false, t: t }; });
+  var uAud = dosareUP.filter(function(d) {
+    if (!d.dataAudiere) return false;
+    var ad = new Date(d.dataAudiere + 'T00:00:00');
+    var ats = new Date(ad.getFullYear(), ad.getMonth(), ad.getDate());
+    var da = Math.round((ats - today) / 864e5);
+    return da >= 0 && da <= termeneZ;
+  }).map(function(d) { return { dataOra: d.dataAudiere + 'T00:00', isAudiereUP: true, u: d }; });
+  var combinat = uD.concat(uAud);
+  combinat.sort(function(a,b) { return new Date(a.dataOra)-new Date(b.dataOra); });
   var dc = document.getElementById('dashTermene');
-  if (!uD.length) { dc.innerHTML = '<p style="color:#718096">Nu ai termene in aceasta perioada</p>'; return; }
+  if (!combinat.length) { dc.innerHTML = '<p style="color:#718096">Nu ai termene in aceasta perioada</p>'; return; }
   var html2 = '';
-  for (var i = 0; i < uD.length; i++) {
-    var t = uD[i];
-    var allD = dosare.concat(dosareLucru).concat(dosareTerminate);
-    var d = null; for (var j = 0; j < allD.length; j++) { if (allD[j].id === t.dosarId) { d = allD[j]; break; } }
-    var td = new Date(t.dataOra);
+  for (var i = 0; i < combinat.length; i++) {
+    var item = combinat[i];
+    var td = new Date(item.dataOra);
     var ts = new Date(td.getFullYear(), td.getMonth(), td.getDate());
     var days = Math.round((ts - today) / 864e5);
+    if (item.isAudiereUP) {
+      var u = item.u;
+      html2 += '<div class="tc" style="border-left-color:#6a1b9a;background:#f3e5f5;cursor:pointer" onclick="viewFisaUP(' + u.id + ')">' +
+        '<div class="td" style="color:#4a148c">' + fmtDate(item.dataOra) +
+        '<span class="bzile" style="background:#6a1b9a">' + (days === 0 ? 'ASTAZI' : days === 1 ? 'MAINE' : 'IN ' + days + ' ZILE') + '</span>' +
+        '<span style="font-size:9px;background:#6a1b9a;color:#fff;padding:2px 5px;border-radius:7px">&#128269; Audiere UP</span>' +
+        '</div><div class="tdet"><div style="font-weight:700;color:#4a148c;font-size:14px;margin-bottom:4px">Dosar UP: ' + u.numar + '</div>' +
+        (u.client ? '<div style="font-weight:600;color:#4a148c;font-size:13px;margin-bottom:3px">Client: ' + u.client + '</div>' : '') +
+        (u.parchet ? '<div style="font-size:13px;color:#4a148c">Parchet: ' + u.parchet + '</div>' : '') +
+        '</div></div>';
+      continue;
+    }
+    var t = item.t;
+    var allD = dosare.concat(dosareLucru).concat(dosareTerminate);
+    var d = null; for (var j = 0; j < allD.length; j++) { if (allD[j].id === t.dosarId) { d = allD[j]; break; } }
     var bg, bc, tc2;
     if (days <= 1) { bg = '#FFEBEE'; bc = '#c62828'; tc2 = '#b71c1c'; }
     else if (days <= 7) { bg = '#FFF3E0'; bc = '#e65100'; tc2 = '#bf360c'; }
@@ -2263,7 +2286,14 @@ function togSarc(id, idx) {
 // ================================================================
 function saveTodo(e) {
   e.preventDefault();
-  var td = { titlu: document.getElementById('tTit').value, descriere: document.getElementById('tDes').value, prioritate: document.getElementById('tPri').value, dataLimita: document.getElementById('tDat').value || null, dosarId: parseInt(document.getElementById('tDos').value) || null };
+  var selVal = document.getElementById('tDos').value;
+  var dosarIdVal = null, dosarManualVal = null;
+  if (selVal === '__manual__') {
+    dosarManualVal = (document.getElementById('tDosManual').value || '').trim() || null;
+  } else if (selVal) {
+    dosarIdVal = parseInt(selVal);
+  }
+  var td = { titlu: document.getElementById('tTit').value, descriere: document.getElementById('tDes').value, prioritate: document.getElementById('tPri').value, dataLimita: document.getElementById('tDat').value || null, dosarId: dosarIdVal, dosarManual: dosarManualVal };
   if (eTodoId) {
     for (var i = 0; i < todos.length; i++) { if (todos[i].id === eTodoId) { for (var k in td) todos[i][k] = td[k]; showAlert('Task actualizat!', 's'); break; } }
   } else {
@@ -2280,15 +2310,56 @@ function editTodo(id) {
   document.getElementById('tDes').value = t.descriere || '';
   document.getElementById('tPri').value = t.prioritate;
   document.getElementById('tDat').value = t.dataLimita || '';
-  document.getElementById('tDos').value = t.dosarId || '';
+  if (t.dosarManual) {
+    document.getElementById('tDos').value = '__manual__';
+    document.getElementById('tDosManual').value = t.dosarManual;
+  } else {
+    document.getElementById('tDos').value = t.dosarId || '';
+    document.getElementById('tDosManual').value = '';
+  }
+  toggleTDosManual();
   document.getElementById('todoFT').textContent = 'Editeaza task';
   showF('todoForm');
 }
+function newTodo() {
+  eTodoId = null;
+  updTodoDos();
+  document.getElementById('tDosManual').value = '';
+  document.getElementById('tDosManual').style.display = 'none';
+  document.getElementById('todoFT').textContent = 'Task nou';
+  showF('todoForm');
+}
+function toggleTDosManual() {
+  var sel = document.getElementById('tDos');
+  var inp = document.getElementById('tDosManual');
+  if (!sel || !inp) return;
+  if (sel.value === '__manual__') { inp.style.display = 'block'; }
+  else { inp.style.display = 'none'; inp.value = ''; }
+}
 function updTodoDos() {
   var s = document.getElementById('tDos');
-  var all = dosare.concat(dosareLucru);
   var html = '<option value="">Fara dosar asociat</option>';
-  for (var i = 0; i < all.length; i++) html += '<option value="' + all[i].id + '">' + all[i].numar + '</option>';
+  if (dosare.length) {
+    html += '<optgroup label="📁 Dosare">';
+    for (var i = 0; i < dosare.length; i++) html += '<option value="' + dosare[i].id + '">' + dosare[i].numar + '</option>';
+    html += '</optgroup>';
+  }
+  if (dosareLucru.length) {
+    html += '<optgroup label="⚙️ In lucru">';
+    for (var i = 0; i < dosareLucru.length; i++) html += '<option value="' + dosareLucru[i].id + '">' + dosareLucru[i].numar + '</option>';
+    html += '</optgroup>';
+  }
+  if (dosareUP.length) {
+    html += '<optgroup label="🔍 Urmarire penala">';
+    for (var i = 0; i < dosareUP.length; i++) html += '<option value="' + dosareUP[i].id + '">' + dosareUP[i].numar + '</option>';
+    html += '</optgroup>';
+  }
+  if (dosareTerminate.length) {
+    html += '<optgroup label="✅ Terminate">';
+    for (var i = 0; i < dosareTerminate.length; i++) html += '<option value="' + dosareTerminate[i].id + '">' + dosareTerminate[i].numar + '</option>';
+    html += '</optgroup>';
+  }
+  html += '<option value="__manual__">✏️ Alt numar (introdu manual)</option>';
   s.innerHTML = html;
 }
 function togTodo(id) { for (var i = 0; i < todos.length; i++) { if (todos[i].id === id) { todos[i].completed = !todos[i].completed; saveData(); renderTodos(); return; } } }
@@ -2313,7 +2384,7 @@ function renderTodos() {
   var html = '';
   for (var i = 0; i < sorted.length; i++) {
     var t = sorted[i];
-    var allD = dosare.concat(dosareLucru).concat(dosareTerminate);
+    var allD = dosare.concat(dosareLucru).concat(dosareUP).concat(dosareTerminate);
     var d = null; for (var j = 0; j < allD.length; j++) { if (allD[j].id === t.dosarId) { d = allD[j]; break; } }
     var exp = false; var dz = null;
     if (!t.completed && t.dataLimita) {
@@ -2327,7 +2398,7 @@ function renderTodos() {
       '<div style="flex:1"><div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;flex-wrap:wrap"><strong style="font-size:13px;color:#2d3748">' + t.titlu + '</strong><span class="pb-' + t.prioritate + '">' + (pl[t.prioritate]||'') + '</span>' + (exp ? '<span style="background:#6c757d;color:#fff;padding:2px 6px;border-radius:10px;font-size:10px">EXPIRAT</span>' : '') + '</div>' +
       (t.descriere ? '<div style="font-size:12px;color:#718096;margin-bottom:4px">' + t.descriere + '</div>' : '') +
       (t.dataLimita ? '<div style="font-size:11px;color:' + (exp ? '#dc3545' : '#718096') + ';margin-bottom:3px">Data: ' + fmtDate(t.dataLimita) + (exp && dz !== null ? ' (' + Math.abs(dz) + 'z intarziere)' : '') + '</div>' : '') +
-      (d ? '<div style="font-size:11px;color:#718096">Dosar: ' + d.numar + '</div>' : '') +
+      (d ? '<div style="font-size:11px;color:#718096">Dosar: ' + d.numar + '</div>' : (t.dosarManual ? '<div style="font-size:11px;color:#718096">Dosar: ' + t.dosarManual + '</div>' : '')) +
       '<div style="margin-top:8px;display:flex;gap:6px"><button class="btn btn-sm" style="background:#6c757d;color:#fff" onclick="editTodo(' + t.id + ')">Edit</button><button class="btn btn-d btn-sm" onclick="delTodo(' + t.id + ')">Del</button></div></div></div></div>';
   }
   c.innerHTML = html;
@@ -2463,7 +2534,16 @@ function gSearch(q) {
   if (!q.trim()) { box.style.display = 'none'; return; }
   var nq = normS(q);
   var res = [];
-  for (var i = 0; i < clienti.length; i++) { var c = clienti[i]; if (normS(c.nume).indexOf(nq) !== -1 || normS(c.cnp).indexOf(nq) !== -1) res.push({ tip: 'Client', ic: 'C', titlu: c.nome || c.numar || '', t: c.numar, sub: c.contact || '', tab: 'clienti', id: c.id }); }
+  for (var i = 0; i < clienti.length; i++) {
+    var c = clienti[i];
+    if (normS(c.nume).indexOf(nq) !== -1 || normS(c.cnp).indexOf(nq) !== -1) {
+      var allDC = dosare.concat(dosareLucru).concat(dosareUP).concat(dosareTerminate);
+      var cnt = 0;
+      for (var k = 0; k < allDC.length; k++) { if (allDC[k].client && normS(allDC[k].client) === normS(c.nume)) cnt++; }
+      var subC = (c.contact || '') + (cnt > 0 ? (c.contact ? ' &middot; ' : '') + cnt + ' dosar' + (cnt > 1 ? 'e' : '') : '');
+      res.push({ tip: 'Client', ic: 'C', titlu: c.nume || '', sub: subC, tab: 'clienti', id: c.id });
+    }
+  }
   for (var i = 0; i < dosare.length; i++) { var d = dosare[i]; if (normS(d.numar).indexOf(nq) !== -1 || normS(d.client).indexOf(nq) !== -1 || normS(d.instanta).indexOf(nq) !== -1) res.push({ tip: 'Dosar', ic: 'D', titlu: d.numar, sub: d.instanta + ' - ' + (d.client||''), tab: 'dosare', id: d.id }); }
   for (var i = 0; i < dosareUP.length; i++) { var d = dosareUP[i]; if (normS(d.numar).indexOf(nq) !== -1 || normS(d.client).indexOf(nq) !== -1) res.push({ tip: 'UP', ic: 'U', titlu: d.numar, sub: d.parchet + ' - ' + (d.client||''), tab: 'up', id: d.id }); }
   for (var i = 0; i < dosareLucru.length; i++) { var d = dosareLucru[i]; if (normS(d.numar).indexOf(nq) !== -1 || normS(d.client).indexOf(nq) !== -1) res.push({ tip: 'Lucru', ic: 'L', titlu: d.numar, sub: d.instanta, tab: 'dosareLucru', id: d.id }); }
