@@ -103,6 +103,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .cday.today{border-color:#2a5298;background:#e6f2ff;font-weight:700}
 .cday.has-t{background:#fff4e6}
 .cday.has-c{background:linear-gradient(135deg,#e0f7fa,#e8f5e9);border-color:#17a2b8}
+.cday.has-up{background:#f3e5f5;border-color:#6a1b9a}
 .chdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
 /* Todo */
 .titem{background:#fff;border:2px solid #e2e8f0;border-radius:10px;padding:13px;margin-bottom:10px}
@@ -1911,7 +1912,8 @@ function updDash() {
   document.getElementById('sTodo').textContent = pnd.length;
   var cb = document.getElementById('calBadge');
   var ms = lunaC.getFullYear() + '-' + pad(lunaC.getMonth() + 1);
-  var nl = termene.filter(function(t) { return t.dataOra && t.dataOra.indexOf(ms) === 0; }).length;
+  var nl = termene.filter(function(t) { return t.dataOra && t.dataOra.indexOf(ms) === 0; }).length +
+    dosareUP.filter(function(u) { return u.dataAudiere && u.dataAudiere.indexOf(ms) === 0; }).length;
   if (cb) { if (nl > 0) { cb.textContent = nl; cb.style.display = 'inline'; } else cb.style.display = 'none'; }
   var today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   var urg = pnd.filter(function(t) {
@@ -2018,7 +2020,8 @@ function renderCal() {
   var mn = ['Ianuarie','Februarie','Martie','Aprilie','Mai','Iunie','Iulie','August','Septembrie','Octombrie','Noiembrie','Decembrie'];
   document.getElementById('lunaT').textContent = mn[mo] + ' ' + y;
   var ms = y + '-' + pad(mo + 1);
-  var nl = termene.filter(function(t) { return t.dataOra && t.dataOra.indexOf(ms) === 0; }).length;
+  var nl = termene.filter(function(t) { return t.dataOra && t.dataOra.indexOf(ms) === 0; }).length +
+    dosareUP.filter(function(u) { return u.dataAudiere && u.dataAudiere.indexOf(ms) === 0; }).length;
   var cb = document.getElementById('calBadge');
   if (cb) { if (nl > 0) { cb.textContent = nl; cb.style.display = 'inline'; } else cb.style.display = 'none'; }
   var fd = new Date(y, mo, 1).getDay();
@@ -2034,12 +2037,14 @@ function renderCal() {
     var dtd = todos.filter(function(t) { return t.dataLimita && t.dataLimita.indexOf(ds) === 0 && !t.completed; });
     var dc = dtd.filter(function(t) { return t.prioritate === 'concediu'; });
     var dtn = dtd.filter(function(t) { return t.prioritate !== 'concediu'; });
+    var dau = dosareUP.filter(function(u) { return u.dataAudiere === ds; });
     var isT = new Date(y, mo, day).toDateString() === new Date().toDateString();
-    var cls = 'cday' + (isT ? ' today' : '') + (dc.length ? ' has-c' : (dt.length || dtn.length ? ' has-t' : ''));
+    var cls = 'cday' + (isT ? ' today' : '') + (dc.length ? ' has-c' : (dt.length || dtn.length ? ' has-t' : '')) + (dau.length ? ' has-up' : '');
     html += '<div class="' + cls + '" onclick="dayDet(\'' + ds + '\')">' +
       '<div style="font-size:11px;font-weight:600">' + day + '</div>' +
       (dt.length ? '<div style="font-size:9px;color:#2a5298">&#128197;' + dt.length + '</div>' : '') +
       (dtn.length ? '<div style="font-size:9px;color:#dc3545">&#10003;' + dtn.length + '</div>' : '') +
+      (dau.length ? '<div style="font-size:9px;color:#6a1b9a">&#128269;' + dau.length + '</div>' : '') +
       (dc.length ? '<div style="font-size:10px">&#127958;</div>' : '') +
       '</div>';
   }
@@ -2051,13 +2056,26 @@ function dayDet(ds) {
   var parts = ds.split('-');
   var dt = termene.filter(function(t) { return t.dataOra.indexOf(ds) === 0; });
   var dtd = todos.filter(function(t) { return t.dataLimita && t.dataLimita.indexOf(ds) === 0; });
+  var dau = dosareUP.filter(function(u) { return u.dataAudiere === ds; });
   var allD = dosare.concat(dosareLucru).concat(dosareTerminate);
   var old = document.getElementById('dayMod'); if (old) old.remove();
   var el = document.createElement('div');
   el.className = 'mov'; el.id = 'dayMod';
   var html = '<div class="mbox" style="max-width:500px" onclick="event.stopPropagation()"><div class="mhdr"><h3 style="margin:0;font-size:15px">' + parts[2] + '/' + parts[1] + '/' + parts[0] + '</h3><button class="mcl" onclick="document.getElementById(\'dayMod\').remove()">&#10005;</button></div><div style="padding:16px">';
-  if (!dt.length && !dtd.length) { html += '<p style="color:#718096;text-align:center;padding:28px 0">Nu ai evenimente</p>'; }
+  if (!dt.length && !dtd.length && !dau.length) { html += '<p style="color:#718096;text-align:center;padding:28px 0">Nu ai evenimente</p>'; }
   else {
+    if (dau.length) {
+      html += '<h4 style="color:#6a1b9a;margin-bottom:9px">&#128269; Audieri UP (' + dau.length + ')</h4>';
+      for (var i = 0; i < dau.length; i++) {
+        var u = dau[i];
+        html += '<div style="cursor:pointer;background:#f3e5f5;border-left:4px solid #6a1b9a;padding:10px;border-radius:8px;margin-bottom:8px" onclick="document.getElementById(\'dayMod\').remove();viewFisaUP(' + u.id + ')">' +
+          '<div style="font-weight:600;color:#4a148c">Dosar UP: ' + u.numar + '</div>' +
+          (u.client ? '<div style="font-size:13px;margin-top:3px;color:#4a148c">Client: ' + u.client + '</div>' : '') +
+          (u.parchet ? '<div style="font-size:12px;color:#4a148c;margin-top:2px">' + u.parchet + '</div>' : '') +
+          '<div style="font-size:11px;color:#6a1b9a;margin-top:5px;font-weight:600">Apasa pentru fisa dosarului &#8594;</div>' +
+          '</div>';
+      }
+    }
     if (dt.length) {
       html += '<h4 style="color:#2a5298;margin-bottom:9px">Termene (' + dt.length + ')</h4>';
       for (var i = 0; i < dt.length; i++) {
